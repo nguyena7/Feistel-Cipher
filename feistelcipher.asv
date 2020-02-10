@@ -1,0 +1,134 @@
+clear all; close all; clc;
+%% Initializations
+block_size = 64;
+key_size = 128;
+rounds = 10000;
+
+% Create plaintext of all ones.
+plaintxt = ones(1, 64);
+
+% Create test plain text of all ones except the first bit is 0.
+test = ones(1, 64);
+test(1) = 0;
+
+% Create key of all ones
+key = ones(1, key_size);
+
+% Generate subkeys
+sub_keys = get_sub_keys(key, rounds, key_size);
+
+% Time the encryption
+tic;
+cipher_text = encrypt(plaintxt, rounds, sub_keys, block_size);
+timerVal = toc;
+
+% Avalanche effect test encryption
+ava_test = encrypt(test, rounds, sub_keys, block_size);
+
+% Decrypt plaintext and avalanche test 
+decrypted_text = decrypt(cipher_text, rounds, sub_keys, block_size);
+ava_decrypt = decrypt(ava_test, rounds, sub_keys, block_size);
+
+% Display outputs
+disp("Plaintext:      " + mat2str(plaintxt));
+disp("Ciphertext:     " + mat2str(cipher_text));
+disp("Decrypted Text: " + mat2str(decrypted_text));
+disp("------------------------------------------------------------------");
+disp("Plain_ava:      " + mat2str(test));
+disp("Cipher_ava:     " + mat2str(ava_test));
+disp("Decrypted_ava:  " + mat2str(ava_decrypt));
+disp("------------------------------------------------------------------");
+disp("Encryption Time: " + timerVal)
+
+%% Encryption
+function cipher_text = encrypt(plaintext, rounds, sub_keys, block_size)
+    % Split plaintext in half
+    [left, right] = split(plaintext, block_size);
+%     disp("ENCRYPTING");
+    
+    % Begin Round loop
+    for i = 1:rounds
+%         disp("Round " + i);
+        subkey = sub_keys(i,:);
+        right_temp = right;
+        
+        % Run Righthand through round function
+        rf_result = round_function(subkey, right);
+        
+        % Swap left and right 
+        right = bitxor(left, rf_result);
+        left = right_temp;
+        
+%         disp("Right: " + mat2str(right));
+%         disp("Left: " + mat2str(left));
+    end
+    
+    cipher_text = horzcat(right, left);
+
+end
+
+function plaintext = decrypt(cipher_text, rounds, sub_keys, block_size)
+    % Split plaintext in half
+    [left, right] = split(cipher_text, block_size);
+    
+%     disp("DECRYPTING");
+    
+    % Begin Round loop
+    for i = rounds:-1:1
+%         disp("Round " + i);
+        subkey = sub_keys(i,:);
+        right_temp = right;
+        
+        % Run Righthand through round function
+        rf_result = round_function(subkey, right);
+        
+        % Swap left and right 
+        right = bitxor(left, rf_result);
+        left = right_temp;
+        
+%         disp("Right: " + mat2str(right));
+%         disp("Left: " + mat2str(left));
+    end
+    plaintext = horzcat(right, left);
+end
+
+%% Split function
+function [left, right] = split(plaintext, block_size)
+    left = plaintext(1:(block_size/2));
+    right = plaintext((block_size/2)+1:end);
+end
+
+%% Subkey generation
+function sub_keys = get_sub_keys(key, rounds, key_size)
+    % Do random stuff to generate subkeys. Take first 32 bits
+    % Store subkeys in matrix.
+    sub_keys = [];
+    subkey = key;
+    random = randi([0 1], 1, key_size);
+    for x = 1:rounds
+        random = circshift(random, x);
+        subkey = circshift(subkey, x);
+        subkey = bitxor(subkey, random);
+        random = circshift(random, x);
+        subkey = circshift(subkey, x);
+        subkey = bitand(subkey, random);
+        sub_keys = [sub_keys; subkey(1:32)];
+    end 
+end
+
+%% Round function - scramble 
+function rf_output = round_function(subkey, right)
+    % Doing random stuff to shuffle... idk
+    rf_output = circshift(right, 2);
+    rf_output = bitxor(subkey, right);
+    rf_output = circshift(rf_output, 3);
+    rf_output = bitxor(rf_output, right);
+    rf_output = circshift(rf_output, 4);
+    rf_output = bitxor(rf_output, subkey);
+    rf_output = circshift(right, 5);
+    rf_output = bitxor(subkey, right);
+    rf_output = circshift(rf_output, 6);
+    rf_output = bitxor(rf_output, right);
+    rf_output = circshift(rf_output, 7);
+    rf_output = bitxor(rf_output, subkey);
+end
